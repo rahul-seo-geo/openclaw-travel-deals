@@ -8,6 +8,7 @@ export interface TravelConfig {
   timezone: "Australia/Melbourne";
   booking_enabled: false;
   top: number;
+  budgets?: Record<string, Record<string, number>>;
 }
 
 export function dataDir(): string {
@@ -48,6 +49,9 @@ function normalizeConfig(value: unknown, base: TravelConfig): TravelConfig {
     booking_enabled: false,
     top: typeof raw.top === "number" && Number.isSafeInteger(raw.top) && raw.top > 0
       ? raw.top : base.top,
+    budgets: typeof raw.budgets === "object" && raw.budgets !== null && !Array.isArray(raw.budgets)
+      ? (raw.budgets as Record<string, Record<string, number>>)
+      : base.budgets,
   };
 }
 
