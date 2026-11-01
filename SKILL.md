@@ -1,85 +1,58 @@
 ---
-name: supermarket-deals
-description: Search German supermarket flyers (Aldi, Lidl, REWE, EDEKA, Kaufland) for product deals via Marktguru. Results ranked by best price per litre (EUR/L). No API key needed.
+name: travel-deals
+description: Monitor flight and hotel deals from Melbourne (MEL Tullamarine + AVV Avalon). On-demand searches and scheduled watchlist alerts via LetsFG/FlightPowers/Amadeus MCP. Booking only after explicit user confirmation.
 ---
 
-# supermarket-deals
+# travel-deals
 
-Search German supermarket flyers for product deals via the Marktguru API. Results are ranked by best price per litre.
+Search and monitor flight + hotel deals from Melbourne. The skill CLI keeps
+state and formats output; YOU (the agent) perform all searches via MCP tools.
 
-## What this skill does
-- Fetches Marktguru API keys automatically from the homepage (no registration needed, keys are cached 6h)
-- Searches current Prospekte (flyers) by product query + ZIP code
-- Supports multiple search terms in one call (merged + deduplicated)
-- Filters by store, ranks by EUR/L
-- Returns a direct Marktguru link for each deal
-- The skill is intentionally "dumb" — it fetches and formats data. Your agent applies smart filtering and formatting for notifications.
+## Commands (run in this skill's directory)
 
-## Setup
+- `node dist/index.js watch add <DEST> [--kind flight|hotel] [--from MEL,AVV] [--dates 2027-05] [--threshold 450]`
+- `node dist/index.js watch list [--json]`
+- `node dist/index.js watch remove <id>`
+- `node dist/index.js record <id>` — pipe `{"best_price_aud":N,"per_origin":{"MEL":N,"AVV":N},"result_count":N}`
+- `node dist/index.js evaluate <id>` — prints Verdict JSON; pins alerts automatically
+- `node dist/index.js format [--title "..."]` — pipe `{"deals":[...]}`, prints markdown
 
-```bash
-cd path/to/supermarket-deals
-npm install
-npm run build
-```
+## Search protocol (on-demand)
 
-Optionally set your defaults:
-```bash
-node dist/index.js config set zip 85540
-node dist/index.js config set stores "Lidl,REWE,EDEKA,ALDI SÜD,Kaufland"
-```
+1. Unless the user pins one airport, run `letsfg` `search_flights` for BOTH
+   `MEL` and `AVV` for the requested route/dates. Merge results.
+2. Normalize each result into a Deal for `format`:
+   `{kind:"flight", origin, destination, price_aud, airline_or_property, stops, depart_at, deep_link, source:"letsfg"}`
+   Convert non-AUD prices to AUD and set `price_aud`.
+3. Optional cross-check: ONE `flightpowers` search on the best route, max 5
+   per day total. Skip silently on quota errors.
+4. Flexible dates ("May-ish")? Call `amadeus` `cheapest_dates` once per
+   origin before searching, then run `node amadeus` once per call. Keep the monthly total well under 2,000 —
+   check `budget status` first and skip analytics above 1,800.
+5. Pipe deals to `format` and reply with its markdown. Always show both
+   airports when both were searched.
 
-## Usage
+## Watchlist scan (scheduled)
 
-```bash
-# Single search term
-node dist/index.js search "Cola Zero" --zip 85540
+For each watch from `watch list --json`: run step 1 (both origins unless the
+watch pins one), `record`, then `evaluate`. Reply ONLY if verdict is `alert`,
+showing the deal and why (`reason`). Silent otherwise. If ANY connector
+fails, send one short status line naming it.
 
-# Multiple terms (merged + deduped, useful for product aliases)
-node dist/index.js search "Cola Zero" "Coke Zero" --zip 85540
+## Booking gate
 
-# Broad search — let your agent do the filtering
-node dist/index.js search "Cola" --zip 85540
+- `booking_enabled` is `false` until the user turns it on (`config set
+  booking_enabled true`).
+- NEVER call `book_flight`/`book_hotel` unless: (a) booking_enabled is true,
+  AND (b) the user replied to a specific displayed offer with explicit
+  confirmation ("book it", "yes, book that one"). Re-verify the live price
+  with `get_flight_results` first and state the final total in your reply.
+- Never output, log, or store card numbers. Vaultwarden-fetched credentials
+  are used transiently at checkout and discarded.
 
-# Filter by specific stores
-node dist/index.js search "Monster Energy" --zip 80331 --stores "Lidl,ALDI SÜD"
+## Errors
 
-# JSON output for agent/cron use
-node dist/index.js search "Cola" --zip 85540 --json
-
-# Show config
-node dist/index.js config
-```
-
-## Agent pattern (recommended)
-
-Use a broad search term and let your agent filter intelligently:
-
-```
-node dist/index.js search "Cola" --zip 85540 --json
-```
-
-Then instruct your agent to:
-- Include deals where description says "versch. Sorten" (these bundle all variants incl. Zero)
-- Include deals that explicitly mention Coca-Cola, Coke Zero, etc.
-- Exclude deals that only mention Powerade, Fuze Tea, Sprite-only, etc.
-- Rank by EUR/L and highlight the best deal
-
-This approach catches deals that Marktguru lists as generic "Cola category" without naming every variant.
-
-## Output columns
-| Column | Description |
-|--------|-------------|
-| Description | Product description from flyer |
-| Store | Retailer name |
-| Size | Volume × quantity (e.g. `6×0.33l`, `1.5l`) |
-| Price | Total price |
-| EUR/L | Price per litre (calculated or from API reference price) |
-| Valid | Deal validity dates |
-| URL | Direct link to Marktguru offer page |
-
-## Notes
-- Prospekte refresh on Mondays and Thursdays
-- Results are cached by Marktguru for ~15 minutes
-- Some regional store branches may not submit flyers to Marktguru — broad queries catch more
-- API keys rotate and are fetched fresh at runtime (cached 6h in `~/.supermarket-deals/keys.json`)
+- 429/quota: back off once, degrade to remaining sources, say which dropped.
+  Never retry-loop.
+- Connector auth errors: tell the user which connector needs re-consent
+  (letsfg: one-tap at letsfg.co/connect; flightpowers: Google sign-in).
