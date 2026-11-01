@@ -38,9 +38,14 @@ state and formats output; YOU (the agent) perform all searches via MCP tools.
 ## Watchlist scan (scheduled)
 
 For each watch from `watch list --json`: run step 1 (both origins unless the
-watch pins one), `record`, then `evaluate`. Reply ONLY if verdict is `alert`,
-showing the deal and why (`reason`). Silent otherwise. If ANY connector
-fails, send one short status line naming it.
+watch pins one), then record the scan result verbatim via
+
+`echo '{"best_price_aud":N,"per_origin":{"MEL":N,"AVV":N},"result_count":N}' | node dist/index.js record <id>`
+
+Never write files under `data/` by hand — the CLI owns them, and history lives
+only in `data/price-history.json`. Then run `node dist/index.js evaluate <id>`.
+Reply ONLY if verdict is `alert`, showing the deal and why (`reason`). Silent
+otherwise. If ANY connector fails, send one short status line naming it.
 
 ## Booking gate
 
