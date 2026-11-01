@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { MELBOURNE_ORIGINS } from "./airports";
 
 export interface TravelConfig {
   origins: string[];
@@ -35,21 +36,36 @@ export function defaults(): TravelConfig {
   };
 }
 
+function normalizeConfig(value: unknown, base: TravelConfig): TravelConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return base;
+  const raw = value as Record<string, unknown>;
+  return {
+    origins: Array.isArray(raw.origins) && raw.origins.length > 0 &&
+      raw.origins.every((origin) => typeof origin === "string" && MELBOURNE_ORIGINS.includes(origin))
+      ? [...raw.origins] : [...base.origins],
+    currency: raw.currency === "AUD" ? "AUD" : base.currency,
+    timezone: raw.timezone === "Australia/Melbourne" ? "Australia/Melbourne" : base.timezone,
+    booking_enabled: false,
+    top: typeof raw.top === "number" && Number.isSafeInteger(raw.top) && raw.top > 0
+      ? raw.top : base.top,
+  };
+}
+
 export function loadConfig(): TravelConfig {
-  let persisted: Partial<TravelConfig>;
+  let persisted: unknown;
   try {
-    persisted = JSON.parse(readFileSync(configPath(), "utf8")) as Partial<TravelConfig>;
+    persisted = JSON.parse(readFileSync(configPath(), "utf8")) as unknown;
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
       return defaults();
     }
     throw error;
   }
-  return { ...defaults(), ...persisted };
+  return normalizeConfig(persisted, defaults());
 }
 
 export function saveConfig(patch: Partial<TravelConfig>): TravelConfig {
-  const config = { ...loadConfig(), ...patch };
+  const config = normalizeConfig(patch, loadConfig());
   mkdirSync(dataDir(), { recursive: true });
   const destination = configPath();
   const temporary = `${destination}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
