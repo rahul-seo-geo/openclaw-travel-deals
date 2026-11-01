@@ -27,7 +27,8 @@ state and formats output; YOU (the agent) perform all searches via MCP tools.
 3. Optional cross-check: ONE `flightpowers` search on the best route, max 5
    per day total. Skip silently on quota errors.
 4. Flexible dates ("May-ish")? Call `amadeus` `cheapest_dates` once per
-   origin before searching, then run `node amadeus` once per call. Keep the monthly total well under 2,000 —
+   origin before searching, then run `node dist/index.js budget record
+   amadeus` once per call. Keep the monthly total well under 2,000 —
    check `budget status` first and skip analytics above 1,800.
 5. Pipe deals to `format` and reply with its markdown. Always show both
    airports when both were searched.
