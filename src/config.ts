@@ -1,66 +1,68 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
-export interface AppConfig {
-  defaultZip: string;
-  defaultStores: string[];
+export interface TravelConfig {
+  origins: string[];
+  currency: "AUD";
+  timezone: "Australia/Melbourne";
+  booking_enabled: false;
+  top: number;
 }
 
-const DEFAULT_CONFIG: AppConfig = {
-  defaultZip: "85540",
-  defaultStores: ["Aldi", "Lidl", "REWE", "EDEKA", "ALDI SÜD", "ALDI NORD", "Kaufland"],
-};
+export function dataDir(): string {
+  return process.env.TRAVEL_DEALS_DATA || join(__dirname, "..", "data");
+}
 
-const CONFIG_DIR = path.join(os.homedir(), ".supermarket-deals");
-const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
+export function configPath(): string {
+  return join(dataDir(), "config.json");
+}
 
-function normalizeConfig(raw: Partial<AppConfig> | undefined): AppConfig {
-  const source = raw ?? {};
+export function watchlistsPath(): string {
+  return join(dataDir(), "watchlists.json");
+}
+
+export function historyPath(): string {
+  return join(dataDir(), "price-history.json");
+}
+
+export function defaults(): TravelConfig {
   return {
-    defaultZip: typeof source.defaultZip === "string" && source.defaultZip.trim() ? source.defaultZip.trim() : DEFAULT_CONFIG.defaultZip,
-    defaultStores: Array.isArray(source.defaultStores) && source.defaultStores.length > 0
-      ? source.defaultStores.map((s) => String(s).trim()).filter(Boolean)
-      : [...DEFAULT_CONFIG.defaultStores],
+    origins: ["MEL", "AVV"],
+    currency: "AUD",
+    timezone: "Australia/Melbourne",
+    booking_enabled: false,
+    top: 5,
   };
 }
 
-export async function ensureConfigDir(): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
-}
-
-export async function loadConfig(): Promise<AppConfig> {
-  await ensureConfigDir();
+export function loadConfig(): TravelConfig {
+  let persisted: Partial<TravelConfig>;
   try {
-    const data = await readFile(CONFIG_PATH, "utf8");
-    const parsed = JSON.parse(data) as Partial<AppConfig>;
-    return normalizeConfig(parsed);
-  } catch {
-    await saveConfig(DEFAULT_CONFIG);
-    return { ...DEFAULT_CONFIG };
+    persisted = JSON.parse(readFileSync(configPath(), "utf8")) as Partial<TravelConfig>;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+      return defaults();
+    }
+    throw error;
   }
+  return { ...defaults(), ...persisted };
 }
 
-export async function saveConfig(config: AppConfig): Promise<void> {
-  await ensureConfigDir();
-  await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-}
-
-export function getConfigPath(): string {
-  return CONFIG_PATH;
-}
-
-export function parseCsvStores(input?: string): string[] | undefined {
-  if (!input) {
-    return undefined;
+export function saveConfig(patch: Partial<TravelConfig>): TravelConfig {
+  const config = { ...loadConfig(), ...patch };
+  mkdirSync(dataDir(), { recursive: true });
+  const destination = configPath();
+  const temporary = `${destination}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  try {
+    writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    renameSync(temporary, destination);
+  } catch (error) {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // Ignore missing temporary file after a failed write.
+    }
+    throw error;
   }
-  const values = input
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  return values.length > 0 ? values : undefined;
-}
-
-export function defaults(): AppConfig {
-  return { ...DEFAULT_CONFIG };
+  return config;
 }
