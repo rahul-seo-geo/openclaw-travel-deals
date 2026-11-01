@@ -1,23 +1,20 @@
 {
-  "name": "supermarket-deals",
+  "name": "openclaw-travel-deals",
   "version": "1.0.0",
-  "description": "OpenClaw skill and CLI for searching German supermarket deals via Marktguru API",
+  "description": "OpenClaw skill and CLI for flight & hotel deal monitoring from Melbourne (MEL+AVV)",
   "type": "commonjs",
   "main": "dist/index.js",
   "bin": {
-    "supermarket-deals": "dist/index.js"
+    "travel-deals": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
-  "keywords": [
-    "openclaw",
-    "marktguru",
-    "supermarket",
-    "deals"
-  ],
+  "keywords": ["openclaw","flights","hotels","deals","melbourne"],
   "license": "MIT",
   "engines": {
     "node": ">=18"
@@ -25,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.0"
   }
 }
